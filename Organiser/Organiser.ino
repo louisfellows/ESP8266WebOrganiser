@@ -80,7 +80,8 @@ void setup()
   display.fillScreen(BACKGROUND_COLOUR);
 
   drawScreen();
-  ESP.deepSleep(10e6);
+  //ESP.deepSleep(3600e6); // 1 Hour
+  ESP.deepSleep(86400e6); // 1 Day
 }
 
 void loop() {};
@@ -102,6 +103,10 @@ void drawScreen()
 
   display.setTextColor(BACKGROUND_COLOUR);
   writeCenteredText(0, 480, 35, date);
+  if (date.startsWith("7 August")) {
+    drawSymbol(0,   38, EMOJI_METAL, 0, 1, BACKGROUND_COLOUR);
+    drawSymbol(440, 38, EMOJI_METAL, 0, 1, BACKGROUND_COLOUR);
+  }
   display.setTextColor(FOREGROUND_COLOUR);
 
 
@@ -153,27 +158,37 @@ void drawScreen()
   // Calendar
   writeHeading(155, "Today's Agenda");
   int16_t starty = 175;
-
+  int8_t count = 0;
+  
   callCalendarApi(&doc, "calendar.calendar", calTodayStart, calTodayEnd);
-  printCalendar(&doc, &starty);
+  printCalendar(&doc, &starty, &count);
 
   callCalendarApi(&doc, "calendar.louis_calendar", calTodayStart, calTodayEnd);
-  printCalendar(&doc, &starty);
+  printCalendar(&doc, &starty, &count);
   
   callCalendarApi(&doc, "calendar.d_d", calTodayStart, calTodayEnd);
-  printCalendar(&doc, &starty);
+  printCalendar(&doc, &starty, &count);
+
+  if (count == 0) {
+    printNoCalendar(&starty, EMOJI_HAPPY);
+  }
 
   writeHeading(starty + 10, "Tomorrow's Agenda");
   starty = starty + 30;
+  count = 0;
 
   callCalendarApi(&doc, "calendar.calendar", calTomStart, calTomEnd);
-  printCalendar(&doc, &starty);
+  printCalendar(&doc, &starty, &count);
 
   callCalendarApi(&doc, "calendar.louis_calendar", calTomStart, calTomEnd);
-  printCalendar(&doc, &starty);
+  printCalendar(&doc, &starty, &count);
   
   callCalendarApi(&doc, "calendar.d_d", calTomStart, calTomEnd);
-  printCalendar(&doc, &starty);
+  printCalendar(&doc, &starty, &count);
+
+  if (count == 0) {
+    printNoCalendar(&starty, EMOJI_HAPPY);
+  }
 
 //  // Quote
 //  callRestApi("https://quotes.rest/", "qod?category=funny&language=en", &doc);
@@ -186,6 +201,10 @@ void drawScreen()
 //  display.setCursor(5, 605);
 //  display.print(quote + " - " + author);
 
+  String updateTime = GetHassioEntityState("sensor.date_time");
+  display.setCursor(5, 645);
+  display.print("Last Updated: " + updateTime);
+  
 
   // Write
   display.display(false);
@@ -261,7 +280,7 @@ void callRestApi(String apiUri, String endpoint, DynamicJsonDocument *doc)
   http.end();
 }
 
-void printCalendar(DynamicJsonDocument *doc, int16_t *y)
+void printCalendar(DynamicJsonDocument *doc, int16_t *y, int8_t *count)
 {
   for (JsonObject item : doc->as<JsonArray>()) {
     const String summary = item["summary"]; 
@@ -270,7 +289,16 @@ void printCalendar(DynamicJsonDocument *doc, int16_t *y)
     display.setCursor(5, *y);
     display.print(start_dateTime.substring(11, 16) + ": " + summary.substring(0, 34));
     *y = *y + 15;
+    *count = *count + 1;
   }
+}
+
+void printNoCalendar(int16_t *y, uint8_t icon) 
+{
+  drawSymbol(5, *y + 17, icon, 0, 1);
+  display.setCursor(40, *y + 8);
+  display.print("Nothing Planned!");
+  *y = *y + 42;
 }
 
 void callCalendarApi(DynamicJsonDocument *doc, String calendar, String startDate, String endDate)
@@ -280,8 +308,13 @@ void callCalendarApi(DynamicJsonDocument *doc, String calendar, String startDate
 
 void drawSymbol(int16_t x, int16_t y, uint8_t c, uint16_t bg, uint8_t Size)
 {
+  drawSymbol(x, y, c, bg, Size, FOREGROUND_COLOUR);
+}
+
+void drawSymbol(int16_t x, int16_t y, uint8_t c, uint16_t bg, uint8_t Size, uint16_t Colour)
+{
   display.setFont(&SymbolMono18pt7b);
-  display.drawChar(x,y,c,FOREGROUND_COLOUR,bg,Size);
+  display.drawChar(x,y,c,Colour,bg,Size);
   display.setFont(&FreeMonoBold9pt7b);
 }
 
@@ -294,5 +327,6 @@ uint8_t selectWeatherSymbol(String weather)
   else if (weather == "fog")          {return WEATHER_FOG;}
   else if (weather == "snowy")        {return WEATHER_SNOWY;}
   else if (weather == "lightning")    {return WEATHER_THUNDER;}
-  else                                {return WEATHER_BLANK;}
+  else if (weather == "windy")        {return WEATHER_WINDY;}
+  else                                {return EMOJI_UNHAPPY;}
 }
