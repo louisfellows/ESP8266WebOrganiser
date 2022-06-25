@@ -1,6 +1,8 @@
  // uncomment next line to use class GFX of library GFX_Root instead of Adafruit_GFX, to use less code and ram
 //#include <GFX.h>
 
+#include "secrets.h"
+
 #include <GxEPD2_BW.h> // including both doesn't use more code or ram
 #include <GxEPD2_3C.h> // including both doesn't use more code or ram
 
@@ -252,7 +254,7 @@ void callRestApi(String apiUri, String endpoint, DynamicJsonDocument *doc)
   String path = apiUri + endpoint; 
   // Your Domain name with URL path or IP address with path
   http.begin(client, path.c_str());
-  http.addHeader("Authorization", "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjMjI2NTBmYWFiODQ0OTE4YmI4ZDhjYTA2MGQ2Zjk4YiIsImlhdCI6MTY1NTU2Mjk2MywiZXhwIjoxOTcwOTIyOTYzfQ.qxRla2qQxzz5jxy6lEzQyGc5r-k6HH-VsRjteLK0M44");
+  http.addHeader("Authorization", HASSIO_BEARER_AUTH);
   
   // Send HTTP GET request
   int httpResponseCode = http.GET();
