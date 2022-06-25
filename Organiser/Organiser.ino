@@ -20,8 +20,6 @@
 #include <Fonts/FreeMonoBold24pt7b.h>
 #include "SymbolMono18pt7b.h"
 
-const char* ssid     = "Terrabeard";
-const char* password = "c5eb4bf545!";
 const int httpPort  = 80;
 const int httpsPort = 443;
 const String serverPath = "http://homeassistant.local:8123/api/";
@@ -48,7 +46,7 @@ void setup()
   WiFi.disconnect();
 #endif
 
-  if (!WiFi.getAutoConnect() || ( WiFi.getMode() != WIFI_STA) || ((WiFi.SSID() != ssid) && String(ssid) != "........"))
+  if (!WiFi.getAutoConnect() || ( WiFi.getMode() != WIFI_STA) || ((WiFi.SSID() != WIFI_SSID) && String(WIFI_SSID) != "........"))
   {
     Serial.println();
     Serial.print("WiFi.getAutoConnect()=");
@@ -57,8 +55,8 @@ void setup()
     Serial.println(WiFi.SSID());
     WiFi.mode(WIFI_STA); // switch off AP
     Serial.print("Connecting to ");
-    Serial.println(ssid);
-    WiFi.begin(ssid, password);
+    Serial.println(WIFI_SSID);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
   }
   int ConnectTimeout = 30; // 15 seconds
   while (WiFi.status() != WL_CONNECTED)
@@ -254,7 +252,7 @@ void callRestApi(String apiUri, String endpoint, DynamicJsonDocument *doc)
   String path = apiUri + endpoint; 
   // Your Domain name with URL path or IP address with path
   http.begin(client, path.c_str());
-  http.addHeader("Authorization", HASSIO_BEARER_AUTH);
+  http.addHeader("Authorization", HASSIO_BEARER_TOKEN);
   
   // Send HTTP GET request
   int httpResponseCode = http.GET();
