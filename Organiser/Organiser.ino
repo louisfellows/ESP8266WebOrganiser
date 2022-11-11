@@ -1,4 +1,4 @@
- // uncomment next line to use class GFX of library GFX_Root instead of Adafruit_GFX, to use less code and ram
+// uncomment next line to use class GFX of library GFX_Root instead of Adafruit_GFX, to use less code and ram
 //#include <GFX.h>
 
 #include "secrets.h"
@@ -22,7 +22,7 @@
 
 const int httpPort  = 80;
 const int httpsPort = 443;
-const String serverPath = "http://homeassistant.local:8123/api/";
+const String serverPath = "http://192.168.1.204:7887/api/";
 
 // select the display class and display driver class in the following file (new style):
 #include "GxEPD2_display_selection_new_style.h"
@@ -80,8 +80,8 @@ void setup()
   display.fillScreen(BACKGROUND_COLOUR);
 
   drawScreen();
-  //ESP.deepSleep(3600e6); // 1 Hour
-  ESP.deepSleep(86400e6); // 1 Day
+  ESP.deepSleep(3600e6); // 1 Hour
+  //ESP.deepSleep(86400e6); // 1 Day
 }
 
 void loop() {};
@@ -94,8 +94,12 @@ void drawScreen()
   display.setFullWindow();
   display.fillScreen(BACKGROUND_COLOUR);
 
+  //Get Data
+  DynamicJsonDocument doc(8192);
+  callApi("Organiser/displayInfo", &doc);
+
   // Heading
-  String date = GetHassioEntityState("input_text.friendlydate");
+  String date = doc["headerDate"];
   Serial.println(date);
   display.setFont(&FreeMonoBold24pt7b);
 
@@ -109,22 +113,13 @@ void drawScreen()
   }
   display.setTextColor(FOREGROUND_COLOUR);
 
-
-//  DynamicJsonDocument message(1024);
-//  callHassioApi("", &message);
-//  writeCenteredText(0, 480, 300, message["message"]);
-
   // Weather
-  DynamicJsonDocument doc(4096);
-  callHassioApi("states/weather.openweathermap", &doc);
-
   // 3 Cols: 5, 160, 320, 475; 
   display.setFont(&FreeMonoBold9pt7b);
 
   writeHeading(55, "Weather");
   
-  JsonObject attributes = doc["attributes"];
-  JsonArray forecast = attributes["forecast"].as<JsonArray>();
+  JsonArray forecast = doc["weatherReports"].as<JsonArray>();
   
   JsonObject day = forecast[0].as<JsonObject>();
   
@@ -135,7 +130,7 @@ void drawScreen()
   
   String calToday = day["datetime"];
   String calTodayStart = calToday.substring(0,10) + "T00:00:00.000Z";
-  String calTodayEnd = calToday.substring(0,10) + "T23:59:59.999Z";
+  String calTodayEnd = calToday.substring(0,10) + "T23:59:59.000Z";
 
   day = forecast[1].as<JsonObject>();
   
@@ -146,7 +141,7 @@ void drawScreen()
     
   String calTom = day["datetime"];
   String calTomStart = calTom.substring(0,10) + "T00:00:00.000Z";
-  String calTomEnd = calTom.substring(0,10) + "T23:59:59.999Z";
+  String calTomEnd = calTom.substring(0,10) + "T23:59:59.000Z";
 
   day = forecast[2].as<JsonObject>();
   
@@ -158,64 +153,19 @@ void drawScreen()
   // Calendar
   writeHeading(155, "Today's Agenda");
   int16_t starty = 175;
-  int8_t count = 0;
-  
-  callCalendarApi(&doc, "calendar.calendar", calTodayStart, calTodayEnd);
-  printCalendar(&doc, &starty, &count);
-
-  callCalendarApi(&doc, "calendar.louis_calendar", calTodayStart, calTodayEnd);
-  printCalendar(&doc, &starty, &count);
-  
-  callCalendarApi(&doc, "calendar.d_d", calTodayStart, calTodayEnd);
-  printCalendar(&doc, &starty, &count);
-
-  if (count == 0) {
-    printNoCalendar(&starty, EMOJI_HAPPY);
-  }
+  printCalendar(doc["calendarEntriesToday"].as<JsonArray>(), &starty);
 
   writeHeading(starty + 10, "Tomorrow's Agenda");
   starty = starty + 30;
-  count = 0;
+  printCalendar(doc["calendarEntriesTomorrow"].as<JsonArray>(), &starty);
 
-  callCalendarApi(&doc, "calendar.calendar", calTomStart, calTomEnd);
-  printCalendar(&doc, &starty, &count);
-
-  callCalendarApi(&doc, "calendar.louis_calendar", calTomStart, calTomEnd);
-  printCalendar(&doc, &starty, &count);
-  
-  callCalendarApi(&doc, "calendar.d_d", calTomStart, calTomEnd);
-  printCalendar(&doc, &starty, &count);
-
-  if (count == 0) {
-    printNoCalendar(&starty, EMOJI_HAPPY);
-  }
-
-//  // Quote
-//  callRestApi("https://quotes.rest/", "qod?category=funny&language=en", &doc);
-//  writeHeading(580, "Quote of the Day");
-//
-//  JsonObject contents_quotes_0 = doc["contents"]["quotes"][0];
-//  const String quote = contents_quotes_0["quote"]; 
-//  const String author = contents_quotes_0["author"]; 
-//  
-//  display.setCursor(5, 605);
-//  display.print(quote + " - " + author);
-
-  String updateTime = GetHassioEntityState("sensor.date_time");
   display.setCursor(5, 645);
-  display.print("Last Updated: " + updateTime);
+  String accessed = doc["accessedTime"];
+  display.print("Last Updated: " + accessed);
   
-
   // Write
   display.display(false);
   Serial.println("Done");
-}
-
-String GetHassioEntityState(String entityId)
-{
-  DynamicJsonDocument doc(1024);
-  callHassioApi("states/" + entityId, &doc);
-  return doc["state"];
 }
 
 void writeCenteredText(int16_t startx, int16_t endx, int16_t y, String text) 
@@ -239,7 +189,28 @@ void writeHeading(int16_t y, String text)
   display.drawFastHLine((10+tbw), y, display.width() - tbw - 15, FOREGROUND_COLOUR);
 }
 
-void callHassioApi(String endpoint, DynamicJsonDocument *doc) 
+void printCalendar(JsonArray items, int16_t *y)
+{
+  if (items.size() == 0) {
+      drawSymbol(5, *y + 17, EMOJI_HAPPY, 0, 1);
+      display.setCursor(40, *y + 8);
+      display.print("Nothing Planned!");
+      *y = *y + 42;
+  }
+  
+  for (JsonObject item : items) {
+    Serial.println(((String)item["summary"]));
+
+    //Serial.println("- Display");
+    display.setCursor(5, *y);
+    display.print(((String)item["display"]));
+       
+    *y = *y + 15;
+  }
+  Serial.println("Done");
+}
+
+void callApi(String endpoint, DynamicJsonDocument *doc) 
 {
   callRestApi(serverPath, endpoint, doc);
 }
@@ -250,9 +221,10 @@ void callRestApi(String apiUri, String endpoint, DynamicJsonDocument *doc)
   HTTPClient http;
 
   String path = apiUri + endpoint; 
+  Serial.println(path);
+  
   // Your Domain name with URL path or IP address with path
   http.begin(client, path.c_str());
-  http.addHeader("Authorization", HASSIO_BEARER_TOKEN);
   
   // Send HTTP GET request
   int httpResponseCode = http.GET();
@@ -260,10 +232,12 @@ void callRestApi(String apiUri, String endpoint, DynamicJsonDocument *doc)
   if (httpResponseCode>0) {
     Serial.print("HTTP Response code: ");
     Serial.println(httpResponseCode);
-    Serial.println(path);
     Serial.println(http.getSize());
-    //String payload = http.getString();
-    //Serial.println(payload);
+
+    // The API is sending some wierd characters to start... Skip those!
+    for (int i = 0; i <= 3; i++) {
+      Serial.print((char)client.read());
+    }
 
     DeserializationError error = deserializeJson(*doc, *http.getStreamPtr());
 
@@ -278,32 +252,6 @@ void callRestApi(String apiUri, String endpoint, DynamicJsonDocument *doc)
   }
   
   http.end();
-}
-
-void printCalendar(DynamicJsonDocument *doc, int16_t *y, int8_t *count)
-{
-  for (JsonObject item : doc->as<JsonArray>()) {
-    const String summary = item["summary"]; 
-    const String start_dateTime = item["start"]["dateTime"]; 
-
-    display.setCursor(5, *y);
-    display.print(start_dateTime.substring(11, 16) + ": " + summary.substring(0, 34));
-    *y = *y + 15;
-    *count = *count + 1;
-  }
-}
-
-void printNoCalendar(int16_t *y, uint8_t icon) 
-{
-  drawSymbol(5, *y + 17, icon, 0, 1);
-  display.setCursor(40, *y + 8);
-  display.print("Nothing Planned!");
-  *y = *y + 42;
-}
-
-void callCalendarApi(DynamicJsonDocument *doc, String calendar, String startDate, String endDate)
-{
-  callHassioApi("calendars/"+calendar+"?start="+startDate+"&end="+endDate, doc);
 }
 
 void drawSymbol(int16_t x, int16_t y, uint8_t c, uint16_t bg, uint8_t Size)
@@ -328,5 +276,7 @@ uint8_t selectWeatherSymbol(String weather)
   else if (weather == "snowy")        {return WEATHER_SNOWY;}
   else if (weather == "lightning")    {return WEATHER_THUNDER;}
   else if (weather == "windy")        {return WEATHER_WINDY;}
+  else if (weather == "clear-night")  {return WEATHER_SUNNY;}
+  else if (weather == "pouring")      {return WEATHER_RAINY;}
   else                                {return EMOJI_UNHAPPY;}
 }
